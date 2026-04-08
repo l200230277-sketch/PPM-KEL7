@@ -61,7 +61,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 245), // ← dinaikkan dari 36, semua elemen turun
+                const SizedBox(height: 245), 
                 Text(
                   'MyDrama',
                   textAlign: TextAlign.center,

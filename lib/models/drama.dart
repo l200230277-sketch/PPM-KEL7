@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 
-/// One main cast entry: name + photo from asset path and/or picked image bytes.
 class CastMember {
   const CastMember({
     required this.name,
@@ -45,7 +44,6 @@ class Drama {
   final String title;
   final int year;
   final double rating;
-  /// Multiple genres (filter matches if any equals category).
   final List<String> genres;
   final List<String> tags;
   final String synopsis;
@@ -55,7 +53,6 @@ class Drama {
   final bool isInMyList;
   final List<CastMember> mainCast;
 
-  /// First genre for compact badges / legacy display.
   String get primaryGenre => genres.isNotEmpty ? genres.first : '';
 
   Drama copyWith({

@@ -302,7 +302,6 @@ class _DramaDetailScreenState extends State<DramaDetailScreen> {
       return;
     }
 
-    // Fallback: same flow as catalog (admin/public) so callbacks match.
     final reco = _recoDrama(title);
     if (reco == null) return;
     widget.onOpenDrama?.call(reco);

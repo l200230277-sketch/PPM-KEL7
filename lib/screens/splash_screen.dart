@@ -20,7 +20,7 @@ class SplashScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 28),
             child: Column(
               children: [
-                const Spacer(flex: 5),  // ← dinaikkan dari 2 ke 4, tulisan turun
+                const Spacer(flex: 5),  
                 Text(
                   'MyDrama',
                   textAlign: TextAlign.center,
@@ -41,7 +41,7 @@ class SplashScreen extends StatelessWidget {
                     height: 1.45,
                   ),
                 ),
-                const Spacer(flex: 3),  // ← tetap sama
+                const Spacer(flex: 3), 
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(

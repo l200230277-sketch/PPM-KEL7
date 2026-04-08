@@ -256,7 +256,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ─── CATALOG TAB ─────────────────────────────────────────────────────────────
 
 class _CatalogTab extends StatelessWidget {
   const _CatalogTab({
@@ -297,14 +296,12 @@ class _CatalogTab extends StatelessWidget {
       );
     }).toList();
 
-    // Popular: fixed items from initial dataset (so new dramas go to Recently added).
     final popular = filtered.where((d) => popularIds.contains(d.id)).take(2).toList();
     final recent = filtered.where((d) => !popularIds.contains(d.id)).take(2).toList();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 10, 18, 140),
       children: [
-        // ── Header ──
         Row(
           children: [
             Text(
@@ -333,11 +330,9 @@ class _CatalogTab extends StatelessWidget {
         ),
         const SizedBox(height: 12),
 
-        // ── Search ──
         _SearchField(onChanged: onSearchChanged),
         const SizedBox(height: 16),
 
-        // ── Categories ──
         const Text(
           'Select Categories',
           style: TextStyle(
@@ -357,7 +352,6 @@ class _CatalogTab extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // ── Popular drama ──
         const Text(
           'Popular drama',
           style: TextStyle(
@@ -384,7 +378,6 @@ class _CatalogTab extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
-        // ── Recently added ──
         const Text(
           'Recently added',
           style: TextStyle(
@@ -408,9 +401,6 @@ class _CatalogTab extends StatelessWidget {
     );
   }
 }
-
-// ─── POPULAR DRAMA CARD ───────────────────────────────────────────────────────
-// Poster cover penuh, badge genre pojok kanan atas, judul di bawah
 
 class _PopularDramaCard extends StatelessWidget {
   const _PopularDramaCard({
@@ -517,9 +507,6 @@ class _PopularDramaCard extends StatelessWidget {
   }
 }
 
-// ─── RECENTLY ADDED BANNER ────────────────────────────────────────────────────
-// Card besar full-width, poster cover hampir selayar, info overlay di bawah
-
 class _RecentDramaBanner extends StatelessWidget {
   const _RecentDramaBanner({
     required this.drama,
@@ -546,7 +533,6 @@ class _RecentDramaBanner extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Poster cover penuh
             DramaPoster(
               assetPath: drama.posterAsset,
               imageBytes: drama.posterBytes,
@@ -554,7 +540,6 @@ class _RecentDramaBanner extends StatelessWidget {
               height: double.infinity,
               fit: BoxFit.cover,
             ),
-            // Gradient overlay bawah untuk keterbacaan teks
             Positioned(
               bottom: 0,
               left: 0,
@@ -619,8 +604,6 @@ class _RecentDramaBanner extends StatelessWidget {
   }
 }
 
-// ─── SIMPLE LIST TAB ─────────────────────────────────────────────────────────
-
 class _SimpleListTab extends StatelessWidget {
   const _SimpleListTab({
     required this.title,
@@ -643,7 +626,6 @@ class _SimpleListTab extends StatelessWidget {
     const panelColor = Color(0xFFABC6C9);
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Approx sizes to keep the panel snug when few items.
         const panelPadding = 14.0;
         const rowHeight = 86.0;
         const separator = 12.0;
@@ -654,7 +636,7 @@ class _SimpleListTab extends StatelessWidget {
             : (panelPadding * 2) +
                 (count * rowHeight) +
                 ((count - 1) * separator);
-        final maxPanelHeight = constraints.maxHeight - 70; // header + breathing room
+        final maxPanelHeight = constraints.maxHeight - 70; 
         final panelHeight = contentHeight.clamp(0, maxPanelHeight);
 
         return Padding(
@@ -778,8 +760,6 @@ class _MiniCircleIcon extends StatelessWidget {
     );
   }
 }
-
-// ─── PROFILE TAB ─────────────────────────────────────────────────────────────
 
 class _ProfileTab extends StatefulWidget {
   const _ProfileTab({
@@ -930,7 +910,6 @@ class _ProfileTabState extends State<_ProfileTab> {
   }
 }
 
-// ─── DRAMA ROW (Favorit & My List) ───────────────────────────────────────────
 
 class _DramaRow extends StatelessWidget {
   const _DramaRow({
@@ -1016,8 +995,6 @@ class _DramaRow extends StatelessWidget {
   }
 }
 
-// ─── SEARCH FIELD ─────────────────────────────────────────────────────────────
-
 class _SearchField extends StatelessWidget {
   const _SearchField({required this.onChanged});
 
@@ -1052,8 +1029,6 @@ class _SearchField extends StatelessWidget {
     );
   }
 }
-
-// ─── CATEGORY CHIP ────────────────────────────────────────────────────────────
 
 class _CategoryChip extends StatelessWidget {
   const _CategoryChip({
@@ -1094,8 +1069,6 @@ class _CategoryChip extends StatelessWidget {
     );
   }
 }
-
-// ─── PROFILE ACTION ───────────────────────────────────────────────────────────
 
 class _ProfileAction extends StatelessWidget {
   const _ProfileAction({
@@ -1144,7 +1117,6 @@ class _ProfileAction extends StatelessWidget {
   }
 }
 
-// ─── EMPTY CARD ───────────────────────────────────────────────────────────────
 
 class _EmptyCard extends StatelessWidget {
   const _EmptyCard({required this.text});
@@ -1163,8 +1135,6 @@ class _EmptyCard extends StatelessWidget {
     );
   }
 }
-
-// ─── PROFILE TEXT FIELD ───────────────────────────────────────────────────────
 
 class _ProfileTextField extends StatelessWidget {
   const _ProfileTextField(
@@ -1200,7 +1170,6 @@ class _ProfileTextField extends StatelessWidget {
   }
 }
 
-// ─── BOTTOM PILL NAVIGATION ───────────────────────────────────────────────────
 
 class _BottomPillNavigation extends StatelessWidget {
   const _BottomPillNavigation({

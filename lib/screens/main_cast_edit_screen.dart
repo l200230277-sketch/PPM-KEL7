@@ -5,7 +5,6 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models/drama.dart';
 
-/// Admin: add one or more cast members (photo + name). Returns updated list on pop.
 class MainCastEditScreen extends StatefulWidget {
   const MainCastEditScreen({super.key, required this.initialCast});
 
