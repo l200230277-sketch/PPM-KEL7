@@ -13,19 +13,16 @@ class PosterGridBackground extends StatelessWidget {
   static const Color _bg = Color(0xFF0D2B2C);
 
   static final List<_Tile> _tiles = [
-    // Baris 1 — diagonal offset -0.04 per kolom
     _Tile(-0.06,  0.00, 0.26, 0.20, -0.22, 1),
     _Tile( 0.23, -0.04, 0.26, 0.20, -0.22, 2),
     _Tile( 0.52, -0.08, 0.26, 0.20, -0.22, 3),
     _Tile( 0.81, -0.12, 0.26, 0.20, -0.22, 4),
 
-    // Baris 2
     _Tile(-0.06,  0.24, 0.26, 0.20, -0.22, 5),
     _Tile( 0.23,  0.20, 0.26, 0.20, -0.22, 6),
     _Tile( 0.52,  0.16, 0.26, 0.20, -0.22, 7),
     _Tile( 0.81,  0.12, 0.26, 0.20, -0.22, 8),
 
-    // Baris 3
     _Tile(-0.06,  0.48, 0.26, 0.20, -0.22, 9),
     _Tile( 0.23,  0.44, 0.26, 0.20, -0.22, 10),
     _Tile( 0.52,  0.40, 0.26, 0.20, -0.22, 11),
@@ -77,7 +74,6 @@ class PosterGridBackground extends StatelessWidget {
             ),
           ),
 
-          // Teal overlay
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -86,7 +82,6 @@ class PosterGridBackground extends StatelessWidget {
             ),
           ),
 
-          // Gradient fade bawah
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(

@@ -19,8 +19,6 @@ class MyDramaApp extends StatefulWidget {
 class _MyDramaAppState extends State<MyDramaApp> {
   bool isAdmin = false;
   bool isLoggedIn = false;
-
-  /// Setelah logout, langsung ke login (bukan splash lagi).
   bool _showSplash = true;
 
   void _onExploreFromSplash() {
