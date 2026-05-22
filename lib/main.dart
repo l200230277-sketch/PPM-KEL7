@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'data/dummy_dramas.dart';
+import 'models/user_session.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/splash_screen.dart';
@@ -17,27 +17,26 @@ class MyDramaApp extends StatefulWidget {
 }
 
 class _MyDramaAppState extends State<MyDramaApp> {
-  bool isAdmin = false;
-  bool isLoggedIn = false;
+  UserSession? _session;
   bool _showSplash = true;
 
   void _onExploreFromSplash() {
     setState(() => _showSplash = false);
   }
 
-  void _handleLogin(bool adminMode) {
-    setState(() {
-      isAdmin = adminMode;
-      isLoggedIn = true;
-    });
+  void _handleLogin(UserSession session) {
+    setState(() => _session = session);
   }
 
   void _logout() {
     setState(() {
-      isLoggedIn = false;
-      isAdmin = false;
+      _session = null;
       _showSplash = false;
     });
+  }
+
+  void _updateSession(UserSession session) {
+    setState(() => _session = session);
   }
 
   @override
@@ -50,11 +49,11 @@ class _MyDramaAppState extends State<MyDramaApp> {
         scaffoldBackgroundColor: const Color(0xFF0F2D2E),
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF005B6E)),
       ),
-      home: isLoggedIn
+      home: _session != null
           ? HomeScreen(
-              isAdmin: isAdmin,
-              initialData: initialDramas(),
+              session: _session!,
               onLogout: _logout,
+              onSessionUpdated: _updateSession,
             )
           : _showSplash
               ? SplashScreen(onExplore: _onExploreFromSplash)

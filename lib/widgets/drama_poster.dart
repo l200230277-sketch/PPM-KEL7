@@ -20,6 +20,26 @@ class DramaPoster extends StatelessWidget {
   final double borderRadius;
   final BoxFit fit;
 
+  static bool _isNetworkUrl(String value) =>
+      value.startsWith('http://') || value.startsWith('https://');
+
+  static Widget Function(BuildContext, Object, StackTrace?) _errorPlaceholder(
+    double? height,
+    double? width,
+  ) {
+    return (context, error, stackTrace) => Container(
+          height: height,
+          width: width,
+          color: const Color(0xFF8EB2B7),
+          alignment: Alignment.center,
+          child: const Icon(
+            Icons.image_not_supported_rounded,
+            color: Colors.white70,
+            size: 34,
+          ),
+        );
+  }
+
   @override
   Widget build(BuildContext context) {
     final Widget image = imageBytes != null
@@ -41,25 +61,21 @@ class DramaPoster extends StatelessWidget {
                   size: 40,
                 ),
               )
-            : Image.asset(
-            assetPath,
-            height: height,
-            width: width,
-            fit: fit,
-            errorBuilder: (context, error, stackTrace) {
-              return Container(
-                height: height,
-                width: width,
-                color: const Color(0xFF8EB2B7),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.image_not_supported_rounded,
-                  color: Colors.white70,
-                  size: 34,
-                ),
-              );
-            },
-          );
+            : _isNetworkUrl(assetPath)
+                ? Image.network(
+                    assetPath,
+                    height: height,
+                    width: width,
+                    fit: fit,
+                    errorBuilder: _errorPlaceholder(height, width),
+                  )
+                : Image.asset(
+                    assetPath,
+                    height: height,
+                    width: width,
+                    fit: fit,
+                    errorBuilder: _errorPlaceholder(height, width),
+                  );
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),

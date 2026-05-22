@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../models/drama.dart';
+import '../services/drama_api_service.dart';
 import '../widgets/drama_poster.dart';
 
 class DramaDetailScreen extends StatefulWidget {
@@ -12,7 +13,7 @@ class DramaDetailScreen extends StatefulWidget {
     required this.isAdmin,
     required this.isFavorite,
     required this.isInMyList,
-    this.allDramas,
+    this.apiService,
     this.onOpenDrama,
     this.onEdit,
     this.onDelete,
@@ -24,7 +25,7 @@ class DramaDetailScreen extends StatefulWidget {
   final bool isAdmin;
   final bool isFavorite;
   final bool isInMyList;
-  final List<Drama>? allDramas;
+  final DramaApiService? apiService;
   final ValueChanged<Drama>? onOpenDrama;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
@@ -39,6 +40,8 @@ class _DramaDetailScreenState extends State<DramaDetailScreen> {
   late bool _isFavorite;
   late bool _isInMyList;
   late final ScrollController _recoController;
+  List<Drama> _recommendations = [];
+  bool _recoLoading = true;
 
   @override
   void initState() {
@@ -46,6 +49,32 @@ class _DramaDetailScreenState extends State<DramaDetailScreen> {
     _isFavorite = widget.isFavorite;
     _isInMyList = widget.isInMyList;
     _recoController = ScrollController();
+    _loadRecommendations();
+  }
+
+  Future<void> _loadRecommendations() async {
+    final api = widget.apiService;
+    if (api == null) {
+      setState(() {
+        _recoLoading = false;
+        _recommendations = [];
+      });
+      return;
+    }
+    try {
+      final list = await api.fetchYouMayAlsoLike(widget.drama.id);
+      if (!mounted) return;
+      setState(() {
+        _recommendations = list;
+        _recoLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _recommendations = [];
+        _recoLoading = false;
+      });
+    }
   }
 
   @override
@@ -233,44 +262,50 @@ class _DramaDetailScreenState extends State<DramaDetailScreen> {
                 const SizedBox(height: 10),
                 SizedBox(
                   height: 240,
-                  child: ScrollConfiguration(
-                    behavior: ScrollConfiguration.of(context).copyWith(
-                      dragDevices: {
-                        PointerDeviceKind.touch,
-                        PointerDeviceKind.mouse,
-                        PointerDeviceKind.trackpad,
-                      },
-                    ),
-                    child: ListView(
-                      controller: _recoController,
-                      primary: false,
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.only(left: 16, right: 4),
-                      children: [
-                        SizedBox(
-                          width: 200,
-                          child: _RecommendCard(
-                            imagePath: 'assets/images/rekomen1.jpg',
-                            title: 'Love Alarm',
-                            cardColor: _recoCard,
-                            onTap: () => _openReco('Love Alarm'),
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        SizedBox(
-                          width: 200,
-                          child: _RecommendCard(
-                            imagePath: 'assets/images/rekomen2.jpg',
-                            title: 'My Name',
-                            cardColor: _recoCard,
-                            onTap: () => _openReco('My Name'),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                      ],
-                    ),
-                  ),
+                  child: _recoLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(color: Colors.white54),
+                        )
+                      : _recommendations.isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: Text(
+                                'Belum ada rekomendasi untuk cast ini.',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                ),
+                              ),
+                            )
+                          : ScrollConfiguration(
+                              behavior: ScrollConfiguration.of(context).copyWith(
+                                dragDevices: {
+                                  PointerDeviceKind.touch,
+                                  PointerDeviceKind.mouse,
+                                  PointerDeviceKind.trackpad,
+                                },
+                              ),
+                              child: ListView.separated(
+                                controller: _recoController,
+                                primary: false,
+                                scrollDirection: Axis.horizontal,
+                                physics: const BouncingScrollPhysics(),
+                                padding: const EdgeInsets.only(left: 16, right: 16),
+                                itemCount: _recommendations.length,
+                                separatorBuilder: (_, _) => const SizedBox(width: 14),
+                                itemBuilder: (context, index) {
+                                  final reco = _recommendations[index];
+                                  return SizedBox(
+                                    width: 200,
+                                    child: _RecommendCard(
+                                      imagePath: reco.posterAsset,
+                                      title: reco.title,
+                                      cardColor: _recoCard,
+                                      onTap: () => widget.onOpenDrama?.call(reco),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
                 ),
               ],
             ),
@@ -280,67 +315,6 @@ class _DramaDetailScreenState extends State<DramaDetailScreen> {
     );
   }
 
-  void _openReco(String title) {
-    final list = widget.allDramas;
-    final found = list?.firstWhere(
-      (d) => d.title.toLowerCase() == title.toLowerCase(),
-      orElse: () => const Drama(
-        id: '',
-        title: '',
-        year: 0,
-        rating: 0,
-        genres: [],
-        tags: [],
-        synopsis: '',
-        posterAsset: '',
-        isFavorite: false,
-        isInMyList: false,
-      ),
-    );
-    if (found != null && found.id.isNotEmpty) {
-      widget.onOpenDrama?.call(found);
-      return;
-    }
-
-    final reco = _recoDrama(title);
-    if (reco == null) return;
-    widget.onOpenDrama?.call(reco);
-  }
-
-  Drama? _recoDrama(String title) {
-    switch (title.toLowerCase()) {
-      case 'love alarm':
-        return const Drama(
-          id: 'reco_love_alarm',
-          title: 'Love Alarm',
-          year: 2019,
-          rating: 8.4,
-          genres: ['Romance'],
-          tags: ['Life'],
-          synopsis:
-              'A romance drama where an app reveals who likes you within 10 meters.',
-          posterAsset: 'assets/images/rekomen1.jpg',
-          isFavorite: false,
-          isInMyList: false,
-        );
-      case 'my name':
-        return const Drama(
-          id: 'reco_my_name',
-          title: 'My Name',
-          year: 2021,
-          rating: 8.6,
-          genres: ['Thriller'],
-          tags: ['Action'],
-          synopsis:
-              'A revenge story as a woman joins a gang and infiltrates the police.',
-          posterAsset: 'assets/images/rekomen2.jpg',
-          isFavorite: false,
-          isInMyList: false,
-        );
-      default:
-        return null;
-    }
-  }
 }
 
 class _CastTile extends StatelessWidget {
@@ -359,7 +333,9 @@ class _CastTile extends StatelessWidget {
             child: member.photoBytes != null
                 ? Image.memory(member.photoBytes!, fit: BoxFit.cover)
                 : member.photoAssetPath.isNotEmpty
-                    ? Image.asset(member.photoAssetPath, fit: BoxFit.cover)
+                    ? member.photoIsNetwork
+                        ? Image.network(member.photoAssetPath, fit: BoxFit.cover)
+                        : Image.asset(member.photoAssetPath, fit: BoxFit.cover)
                     : Container(
                         color: const Color(0xFF8EB2B7),
                         alignment: Alignment.center,
@@ -413,11 +389,28 @@ class _RecommendCard extends StatelessWidget {
               Expanded(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(20),
-                  child: Image.asset(
-                    imagePath,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
+                  child: imagePath.startsWith('http')
+                      ? Image.network(
+                          imagePath,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Container(
+                            color: const Color(0xFF8EB2B7),
+                            alignment: Alignment.center,
+                            child: const Icon(Icons.movie, color: Colors.white54),
+                          ),
+                        )
+                      : imagePath.isNotEmpty
+                          ? Image.asset(
+                              imagePath,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            )
+                          : Container(
+                              color: const Color(0xFF8EB2B7),
+                              alignment: Alignment.center,
+                              child: const Icon(Icons.movie, color: Colors.white54),
+                            ),
                 ),
               ),
               const SizedBox(height: 8),

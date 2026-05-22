@@ -11,6 +11,17 @@ class CastMember {
   final String photoAssetPath;
   final Uint8List? photoBytes;
 
+  bool get photoIsNetwork =>
+      photoAssetPath.startsWith('http://') ||
+      photoAssetPath.startsWith('https://');
+
+  factory CastMember.fromJson(Map<String, dynamic> json) {
+    return CastMember(
+      name: json['name'] as String? ?? '',
+      photoAssetPath: json['photo_url'] as String? ?? '',
+    );
+  }
+
   CastMember copyWith({
     String? name,
     String? photoAssetPath,
@@ -54,6 +65,37 @@ class Drama {
   final List<CastMember> mainCast;
 
   String get primaryGenre => genres.isNotEmpty ? genres.first : '';
+
+  bool get posterIsNetwork =>
+      posterAsset.startsWith('http://') || posterAsset.startsWith('https://');
+
+  factory Drama.fromJson(Map<String, dynamic> json) {
+    final genres = (json['genres'] as List<dynamic>? ?? [])
+        .map((g) => g.toString())
+        .toList();
+    final tags = (json['tags'] as List<dynamic>? ?? [])
+        .map((t) => t.toString())
+        .toList();
+    final cast = (json['main_cast'] as List<dynamic>? ?? [])
+        .map(
+          (c) => CastMember.fromJson(c as Map<String, dynamic>),
+        )
+        .toList();
+
+    return Drama(
+      id: json['id'].toString(),
+      title: json['title'] as String? ?? '',
+      year: (json['year'] as num?)?.toInt() ?? 0,
+      rating: (json['rating'] as num?)?.toDouble() ?? 0,
+      genres: genres,
+      tags: tags,
+      synopsis: json['synopsis'] as String? ?? '',
+      posterAsset: json['poster_url'] as String? ?? '',
+      isFavorite: json['is_favorite'] as bool? ?? false,
+      isInMyList: json['is_in_my_list'] as bool? ?? false,
+      mainCast: cast,
+    );
+  }
 
   Drama copyWith({
     String? id,

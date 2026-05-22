@@ -1,8 +1,13 @@
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+
 import '../models/drama.dart';
+import '../models/user_session.dart';
+import '../services/auth_api_service.dart';
+import '../services/drama_api_service.dart';
 import '../widgets/drama_poster.dart';
 import 'drama_detail_screen.dart';
 import 'drama_form_screen.dart';
@@ -10,36 +15,143 @@ import 'drama_form_screen.dart';
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
-    required this.isAdmin,
-    required this.initialData,
+    required this.session,
     required this.onLogout,
+    required this.onSessionUpdated,
   });
 
-  final bool isAdmin;
-  final List<Drama> initialData;
+  final UserSession session;
   final VoidCallback onLogout;
+  final ValueChanged<UserSession> onSessionUpdated;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  late DramaApiService _api;
+  final _authApi = AuthApiService();
+  Timer? _searchDebounce;
+  final _searchController = TextEditingController();
+
   int _tabIndex = 0;
-  late List<Drama> _dramas;
-  late final Set<String> _popularIds;
+  List<Drama> _genreDramas = [];
+  List<Drama> _popularDramas = [];
+  List<Drama> _recentDramas = [];
+  List<Drama> _favoriteDramas = [];
+  List<Drama> _myListDramas = [];
+  List<String> _categories = const ['All'];
+  bool _isLoading = true;
+  bool _isFilterLoading = false;
+  String? _loadError;
   String _searchQuery = '';
   String _activeCategory = 'All';
-  String _profileName = 'Minjung';
-  String _profileEmail = 'minjung234@gmail.com';
-  String _firstName = 'Minjung';
-  String _lastName = 'Go';
   Uint8List? _profileImageBytes;
+
+  bool get _showGenreGrid =>
+      _activeCategory != 'All' || _searchQuery.trim().isNotEmpty;
 
   @override
   void initState() {
     super.initState();
-    _dramas = [...widget.initialData];
-    _popularIds = widget.initialData.take(2).map((d) => d.id).toSet();
+    _api = DramaApiService(token: widget.session.token);
+    _loadInitial();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadInitial() async {
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
+    try {
+      final results = await Future.wait([
+        _api.fetchCategories(),
+        _api.fetchPopular(),
+        _api.fetchRecentlyAdded(),
+        _api.fetchFavorites(),
+        _api.fetchMyList(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _categories = results[0] as List<String>;
+        _popularDramas = results[1] as List<Drama>;
+        _recentDramas = results[2] as List<Drama>;
+        _favoriteDramas = results[3] as List<Drama>;
+        _myListDramas = results[4] as List<Drama>;
+        _isLoading = false;
+      });
+      if (_showGenreGrid) await _loadFilteredDramas();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadFilteredDramas() async {
+    if (!_showGenreGrid) {
+      setState(() => _genreDramas = []);
+      return;
+    }
+    setState(() => _isFilterLoading = true);
+    try {
+      final dramas = await _api.fetchDramas(
+        search: _searchQuery.trim(),
+        category: _activeCategory,
+      );
+      if (!mounted) return;
+      setState(() {
+        _genreDramas = dramas;
+        _isFilterLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isFilterLoading = false);
+    }
+  }
+
+  Future<void> _refreshUserLists() async {
+    try {
+      final fav = await _api.fetchFavorites();
+      final my = await _api.fetchMyList();
+      if (!mounted) return;
+      setState(() {
+        _favoriteDramas = fav;
+        _myListDramas = my;
+      });
+    } catch (_) {}
+  }
+
+  void _mergeDramaFlags(Drama updated) {
+    void replaceInList(List<Drama> list) {
+      final i = list.indexWhere((d) => d.id == updated.id);
+      if (i != -1) list[i] = updated;
+    }
+    replaceInList(_genreDramas);
+    replaceInList(_popularDramas);
+    replaceInList(_recentDramas);
+    replaceInList(_favoriteDramas);
+    replaceInList(_myListDramas);
+  }
+
+  void _onSearchChanged(String value) {
+    setState(() => _searchQuery = value);
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 400), _loadFilteredDramas);
+  }
+
+  void _onCategorySelected(String value) {
+    setState(() => _activeCategory = value);
+    _loadFilteredDramas();
   }
 
   Future<void> _openAddDrama() async {
@@ -50,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (result == null) return;
 
     setState(() {
-      _dramas.insert(
+      _genreDramas.insert(
         0,
         Drama(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -78,9 +190,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (result == null) return;
 
     setState(() {
-      final index = _dramas.indexWhere((d) => d.id == drama.id);
+      final index = _genreDramas.indexWhere((d) => d.id == drama.id);
       if (index == -1) return;
-      _dramas[index] = _dramas[index].copyWith(
+      _genreDramas[index] = _genreDramas[index].copyWith(
         title: result.title,
         year: result.year,
         rating: result.rating,
@@ -96,52 +208,70 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _deleteDrama(Drama drama) {
     setState(() {
-      _dramas.removeWhere((d) => d.id == drama.id);
+      _genreDramas.removeWhere((d) => d.id == drama.id);
+      _popularDramas.removeWhere((d) => d.id == drama.id);
+      _recentDramas.removeWhere((d) => d.id == drama.id);
     });
   }
 
-  void _toggleFavorite(Drama drama) {
-    setState(() {
-      final index = _dramas.indexWhere((d) => d.id == drama.id);
-      if (index == -1) return;
-      final item = _dramas[index];
-      _dramas[index] = item.copyWith(isFavorite: !item.isFavorite);
-    });
+  Future<void> _toggleFavorite(Drama drama) async {
+    try {
+      final isFav = await _api.toggleFavorite(drama.id);
+      final updated = drama.copyWith(isFavorite: isFav);
+      setState(() => _mergeDramaFlags(updated));
+      await _refreshUserLists();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menyimpan favorit: $e')),
+      );
+    }
   }
 
-  void _toggleMyList(Drama drama) {
-    setState(() {
-      final index = _dramas.indexWhere((d) => d.id == drama.id);
-      if (index == -1) return;
-      final item = _dramas[index];
-      _dramas[index] = item.copyWith(isInMyList: !item.isInMyList);
-    });
+  Future<void> _toggleMyList(Drama drama) async {
+    try {
+      final inList = await _api.toggleMyList(drama.id);
+      final updated = drama.copyWith(isInMyList: inList);
+      setState(() => _mergeDramaFlags(updated));
+      await _refreshUserLists();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menyimpan My List: $e')),
+      );
+    }
   }
 
   Future<void> _openDetail(Drama drama) async {
+    Drama detail = drama;
+    try {
+      detail = await _api.fetchDramaDetail(drama.id);
+    } catch (_) {}
+
+    if (!mounted) return;
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => DramaDetailScreen(
-          drama: drama,
-          isAdmin: widget.isAdmin,
-          isFavorite: drama.isFavorite,
-          isInMyList: drama.isInMyList,
-          allDramas: _dramas,
+          drama: detail,
+          isAdmin: widget.session.isAdmin,
+          isFavorite: detail.isFavorite,
+          isInMyList: detail.isInMyList,
+          apiService: _api,
           onOpenDrama: _openDetail,
-          onEdit: widget.isAdmin ? () => _openEditDrama(drama) : null,
-          onDelete: widget.isAdmin
+          onEdit: widget.session.isAdmin ? () => _openEditDrama(drama) : null,
+          onDelete: widget.session.isAdmin
               ? () {
                   _deleteDrama(drama);
                   Navigator.pop(context);
                 }
               : null,
-          onToggleFavorite: () => _toggleFavorite(drama),
-          onToggleMyList: () => _toggleMyList(drama),
+          onToggleFavorite: () => _toggleFavorite(detail),
+          onToggleMyList: () => _toggleMyList(detail),
         ),
       ),
     );
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   @override
@@ -170,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       right: 0,
                       bottom: 16,
                       child: _BottomPillNavigation(
-                        isAdmin: widget.isAdmin,
+                        isAdmin: widget.session.isAdmin,
                         currentIndex: _tabIndex,
                         onTap: (index) => setState(() => _tabIndex = index),
                       ),
@@ -188,23 +318,64 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildCurrentTab() {
     switch (_tabIndex) {
       case 0:
+        if (_isLoading) {
+          return const Center(
+            child: CircularProgressIndicator(color: Colors.white),
+          );
+        }
+        if (_loadError != null) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Gagal memuat data.\nPastikan backend Django berjalan.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.9)),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _loadError!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: _loadInitial,
+                    child: const Text('Coba lagi'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
         return _CatalogTab(
-          isAdmin: widget.isAdmin,
-          profileName: widget.isAdmin ? 'admin' : _profileName,
-          dramas: _dramas,
-          popularIds: _popularIds,
-          onOpenDetail: _openDetail,
-          onEdit: _openEditDrama,
+          isAdmin: widget.session.isAdmin,
+          profileName: widget.session.displayName,
+          categories: _categories,
+          popularDramas: _popularDramas,
+          recentDramas: _recentDramas,
+          genreDramas: _genreDramas,
+          showGenreGrid: _showGenreGrid,
+          isFilterLoading: _isFilterLoading,
           activeCategory: _activeCategory,
           searchQuery: _searchQuery,
+          onOpenDetail: _openDetail,
+          onEdit: _openEditDrama,
           onProfileTap: () => setState(() => _tabIndex = 3),
-          onCategorySelected: (value) => setState(() => _activeCategory = value),
-          onSearchChanged: (value) => setState(() => _searchQuery = value),
+          onCategorySelected: _onCategorySelected,
+          searchController: _searchController,
+          onSearchChanged: _onSearchChanged,
         );
       case 1:
         return _SimpleListTab(
           title: 'My Favorit',
-          dramas: _dramas.where((d) => d.isFavorite).toList(),
+          dramas: _favoriteDramas,
           onOpenDetail: _openDetail,
           onBack: () => setState(() => _tabIndex = 0),
           onToggleFavorite: _toggleFavorite,
@@ -212,34 +383,42 @@ class _HomeScreenState extends State<HomeScreen> {
       case 2:
         return _SimpleListTab(
           title: 'My List',
-          dramas: _dramas.where((d) => d.isInMyList).toList(),
+          dramas: _myListDramas,
           onOpenDetail: _openDetail,
           onBack: () => setState(() => _tabIndex = 0),
           onToggleMyList: _toggleMyList,
         );
       default:
         return _ProfileTab(
-          isAdmin: widget.isAdmin,
+          isAdmin: widget.session.isAdmin,
           onLogout: widget.onLogout,
-          profileName: widget.isAdmin ? 'Admin' : _profileName,
-          email: widget.isAdmin ? 'admin1@gmail.com' : _profileEmail,
-          firstName: widget.isAdmin ? 'Admin' : _firstName,
-          lastName: widget.isAdmin ? '' : _lastName,
+          profileName: widget.session.displayName,
+          email: widget.session.email,
+          firstName: widget.session.firstName,
+          lastName: widget.session.lastName,
           initialImageBytes: _profileImageBytes,
-          onSave: (firstName, lastName, email) {
-            setState(() {
-              _firstName = firstName;
-              _lastName = lastName;
-              _profileEmail = email;
-              _profileName =
-                  [firstName, lastName].where((e) => e.trim().isNotEmpty).join(' ');
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Profile saved successfully.'),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
+          onSave: (firstName, lastName, email) async {
+            try {
+              final updated = await _authApi.updateProfile(
+                token: widget.session.token,
+                firstName: firstName,
+                lastName: lastName,
+                email: email,
+              );
+              widget.onSessionUpdated(updated);
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Profile saved successfully.'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            } catch (e) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Gagal menyimpan profil: $e')),
+              );
+            }
           },
           onImagePicked: (bytes) {
             setState(() => _profileImageBytes = bytes);
@@ -250,7 +429,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             );
           },
-          onAddKdrama: widget.isAdmin ? _openAddDrama : null,
+          onAddKdrama: widget.session.isAdmin ? _openAddDrama : null,
         );
     }
   }
@@ -261,44 +440,41 @@ class _CatalogTab extends StatelessWidget {
   const _CatalogTab({
     required this.isAdmin,
     required this.profileName,
-    required this.dramas,
-    required this.popularIds,
-    required this.onOpenDetail,
-    required this.onEdit,
+    required this.categories,
+    required this.popularDramas,
+    required this.recentDramas,
+    required this.genreDramas,
+    required this.showGenreGrid,
+    required this.isFilterLoading,
     required this.activeCategory,
     required this.searchQuery,
+    required this.onOpenDetail,
+    required this.onEdit,
     required this.onProfileTap,
+    required this.searchController,
     required this.onCategorySelected,
     required this.onSearchChanged,
   });
 
   final bool isAdmin;
   final String profileName;
-  final List<Drama> dramas;
-  final Set<String> popularIds;
-  final ValueChanged<Drama> onOpenDetail;
-  final ValueChanged<Drama> onEdit;
+  final List<String> categories;
+  final List<Drama> popularDramas;
+  final List<Drama> recentDramas;
+  final List<Drama> genreDramas;
+  final bool showGenreGrid;
+  final bool isFilterLoading;
   final String activeCategory;
   final String searchQuery;
+  final ValueChanged<Drama> onOpenDetail;
+  final ValueChanged<Drama> onEdit;
   final VoidCallback onProfileTap;
+  final TextEditingController searchController;
   final ValueChanged<String> onCategorySelected;
   final ValueChanged<String> onSearchChanged;
 
   @override
   Widget build(BuildContext context) {
-    final filtered = dramas.where((drama) {
-      final matchesQuery =
-          drama.title.toLowerCase().contains(searchQuery.toLowerCase());
-      if (!matchesQuery) return false;
-      if (activeCategory == 'All') return true;
-      return drama.genres.any(
-        (g) => g.toLowerCase() == activeCategory.toLowerCase(),
-      );
-    }).toList();
-
-    final popular = filtered.where((d) => popularIds.contains(d.id)).take(2).toList();
-    final recent = filtered.where((d) => !popularIds.contains(d.id)).take(2).toList();
-
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 10, 18, 140),
       children: [
@@ -330,7 +506,10 @@ class _CatalogTab extends StatelessWidget {
         ),
         const SizedBox(height: 12),
 
-        _SearchField(onChanged: onSearchChanged),
+        _SearchField(
+          controller: searchController,
+          onChanged: onSearchChanged,
+        ),
         const SizedBox(height: 16),
 
         const Text(
@@ -339,65 +518,203 @@ class _CatalogTab extends StatelessWidget {
               color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: ['All', 'Thriller', 'Action', 'Horror'].map((category) {
-            return _CategoryChip(
-              label: category,
-              active: category == activeCategory,
-              onTap: () => onCategorySelected(category),
-            );
-          }).toList(),
+        SizedBox(
+          height: 40,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: categories.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final category = categories[index];
+              return _CategoryChip(
+                label: category,
+                active: category == activeCategory,
+                onTap: () => onCategorySelected(category),
+              );
+            },
+          ),
         ),
         const SizedBox(height: 16),
 
-        const Text(
-          'Popular drama',
-          style: TextStyle(
-              color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 250,
-          child: popular.isEmpty
-              ? const _EmptyCard(text: 'No popular drama.')
-              : ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: popular.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 12),
-                  itemBuilder: (context, index) {
-                    final drama = popular[index];
-                    return _PopularDramaCard(
-                      drama: drama,
-                      onTap: () => onOpenDetail(drama),
-                      onEdit: isAdmin ? () => onEdit(drama) : null,
-                    );
-                  },
-                ),
-        ),
-        const SizedBox(height: 20),
-
-        const Text(
-          'Recently added',
-          style: TextStyle(
-              color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 10),
-        if (recent.isEmpty)
-          const _EmptyCard(text: 'No data available.')
-        else
-          ...recent.map(
-            (drama) => Padding(
-              padding: const EdgeInsets.only(bottom: 14),
-              child: _RecentDramaBanner(
-                drama: drama,
-                onTap: () => onOpenDetail(drama),
-                onEdit: isAdmin ? () => onEdit(drama) : null,
-              ),
+        if (showGenreGrid) ...[
+          Text(
+            activeCategory != 'All'
+                ? activeCategory
+                : 'Search results',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
             ),
           ),
+          const SizedBox(height: 10),
+          if (isFilterLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
+            )
+          else if (genreDramas.isEmpty)
+            const _EmptyCard(text: 'Tidak ada drama ditemukan.')
+          else
+            _DramaGrid(
+              dramas: genreDramas,
+              onOpenDetail: onOpenDetail,
+              onEdit: isAdmin ? onEdit : null,
+            ),
+        ] else ...[
+          const Text(
+            'Popular drama',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 250,
+            child: popularDramas.isEmpty
+                ? const _EmptyCard(text: 'No popular drama.')
+                : ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: popularDramas.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final drama = popularDramas[index];
+                      return _PopularDramaCard(
+                        drama: drama,
+                        onTap: () => onOpenDetail(drama),
+                        onEdit: isAdmin ? () => onEdit(drama) : null,
+                      );
+                    },
+                  ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Recently added',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (recentDramas.isEmpty)
+            const _EmptyCard(text: 'No data available.')
+          else
+            ...recentDramas.map(
+              (drama) => Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: _RecentDramaBanner(
+                  drama: drama,
+                  onTap: () => onOpenDetail(drama),
+                  onEdit: isAdmin ? () => onEdit(drama) : null,
+                ),
+              ),
+            ),
+        ],
       ],
+    );
+  }
+}
+
+class _DramaGrid extends StatelessWidget {
+  const _DramaGrid({
+    required this.dramas,
+    required this.onOpenDetail,
+    this.onEdit,
+  });
+
+  final List<Drama> dramas;
+  final ValueChanged<Drama> onOpenDetail;
+  final ValueChanged<Drama>? onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 0.62,
+      ),
+      itemCount: dramas.length,
+      itemBuilder: (context, index) {
+        final drama = dramas[index];
+        return _GridDramaCard(
+          drama: drama,
+          onTap: () => onOpenDetail(drama),
+          onEdit: onEdit != null ? () => onEdit!(drama) : null,
+        );
+      },
+    );
+  }
+}
+
+class _GridDramaCard extends StatelessWidget {
+  const _GridDramaCard({
+    required this.drama,
+    required this.onTap,
+    this.onEdit,
+  });
+
+  final Drama drama;
+  final VoidCallback onTap;
+  final VoidCallback? onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFCADADD),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        clipBehavior: Clip.hardEdge,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: DramaPoster(
+                assetPath: drama.posterAsset,
+                imageBytes: drama.posterBytes,
+                borderRadius: 0,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    drama.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF133343),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${drama.year} · ★ ${drama.rating}',
+                    style: const TextStyle(
+                      color: Color(0xFF4B5961),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -996,8 +1313,12 @@ class _DramaRow extends StatelessWidget {
 }
 
 class _SearchField extends StatelessWidget {
-  const _SearchField({required this.onChanged});
+  const _SearchField({
+    required this.controller,
+    required this.onChanged,
+  });
 
+  final TextEditingController controller;
   final ValueChanged<String> onChanged;
 
   @override
@@ -1013,6 +1334,7 @@ class _SearchField extends StatelessWidget {
         children: [
           Expanded(
             child: TextField(
+              controller: controller,
               onChanged: onChanged,
               style: const TextStyle(color: Colors.white),
               decoration: const InputDecoration(
